@@ -1,0 +1,14 @@
+# EnisOS / enis-info
+# fastfetch → neofetch → fallback sırasıyla sistem bilgisi gösterir.
+
+if command -v fastfetch >/dev/null 2>&1; then
+  exec fastfetch "$@"
+fi
+
+if command -v neofetch >/dev/null 2>&1; then
+  exec neofetch "$@"
+fi
+
+echo -e "\e[36m[EnisOS]\e[0m $(. /etc/os-release && printf '%s' "$PRETTY_NAME")"
+echo -e "\e[36m[Kernel]\e[0m $(uname -srm)"
+echo -e "\e[36m[Host]\e[0m $(uname -n)"

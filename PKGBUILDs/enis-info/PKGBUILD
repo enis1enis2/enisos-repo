@@ -1,0 +1,18 @@
+# Maintainer: Enis <enis1enis2@users.noreply.github.com>
+
+pkgname=enis-info
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="EnisOS system info — fastfetch/neofetch branding wrapper"
+arch=('x86_64')
+url="https://enis1enis2.github.io/enisos-repo"
+license=('MIT')
+depends=('bash')
+optdepends=('fastfetch: rich system info output'
+            'neofetch: classic system info output')
+source=("enis-info")
+sha256sums=('a3289d23ded8dd8850507d5771f668356512c21e0de22d63c2a4f1285d409268')
+
+package() {
+  install -Dm755 "enis-info" "$pkgdir/usr/local/bin/enis-info"
+}

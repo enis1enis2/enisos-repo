@@ -1,0 +1,93 @@
+name: Build enisos-repo
+
+on:
+  push:
+    paths:
+      - "PKGBUILDs/**"
+      - ".github/workflows/build-repo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # PKGBUILDs dizinlerini matrix listesine çevirir
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          cd PKGBUILDs
+          dirs=$(find . -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort | jq -R . | jq -s -c .)
+          echo "matrix=$dirs" >> "$GITHUB_OUTPUT"
+
+  # Her paket ayrı job: archlinux:base-devel container'da makepkg
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm git
+      - uses: actions/checkout@v4
+      - name: Build package
+        run: |
+          useradd -m build
+          chown -R build:build "$GITHUB_WORKSPACE"
+          su build -c 'cd "$GITHUB_WORKSPACE/PKGBUILDs/${{ matrix.pkg }}" && makepkg -s --noconfirm'
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.pkg }}
+          path: PKGBUILDs/${{ matrix.pkg }}/*.pkg.tar.zst
+          if-no-files-found: error
+
+  # Tüm paketleri topla, repo-add ile db oluştur, gh-pages'e push et
+  repo:
+    needs: build
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm git
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: pkgs
+          merge-multiple: true
+      - name: Create repository database
+        run: |
+          mkdir -p x86_64
+          find pkgs -name '*.pkg.tar.zst' -exec mv {} x86_64/ \;
+          cd x86_64
+          repo-add enis-repo.db.tar.gz *.pkg.tar.zst
+          ls -la
+      - name: Publish to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse --verify gh-pages >/dev/null 2>&1; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          rm -rf x86_64
+          mkdir -p x86_64
+          find ../x86_64 -name '*.pkg.tar.zst' -exec cp {} x86_64/ \;
+          cp ../x86_64/*.db* x86_64/ 2>/dev/null || true
+          cp ../x86_64/*.files* x86_64/ 2>/dev/null || true
+          git add x86_64/
+          if git diff --cached --quiet; then
+            echo "Değişiklik yok, push atlanıyor"
+          else
+            git commit -m "Update repo [skip ci]"
+            git push -f origin gh-pages
+          fi
