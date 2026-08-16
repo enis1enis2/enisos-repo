@@ -57,37 +57,41 @@ jobs:
     steps:
       - name: Install git
         run: pacman -Sy --noconfirm git
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: pkgs
           merge-multiple: true
       - name: Create repository database
         run: |
-          mkdir -p x86_64
-          find pkgs -name '*.pkg.tar.zst' -exec mv {} x86_64/ \;
-          cd x86_64
+          mkdir -p "$GITHUB_WORKSPACE/x86_64"
+          find pkgs -name '*.pkg.tar.zst' -exec mv {} "$GITHUB_WORKSPACE/x86_64/" \;
+          cd "$GITHUB_WORKSPACE/x86_64"
           repo-add enis-repo.db.tar.gz *.pkg.tar.zst
           ls -la
       - name: Publish to gh-pages
+        shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git rev-parse --verify gh-pages >/dev/null 2>&1; then
-            git checkout gh-pages
+          set -euxo pipefail
+          SRC="$GITHUB_WORKSPACE/x86_64"
+          PUB="$(mktemp -d)"
+          git init "$PUB"
+          git -C "$PUB" config user.name "github-actions[bot]"
+          git -C "$PUB" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$PUB" remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git -C "$PUB" ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git -C "$PUB" fetch --depth=1 origin gh-pages:refs/heads/gh-pages
+            git -C "$PUB" checkout gh-pages
           else
-            git checkout --orphan gh-pages
-            git rm -rf . >/dev/null 2>&1 || true
+            git -C "$PUB" checkout --orphan gh-pages
+            git -C "$PUB" rm -rf . 2>/dev/null || true
           fi
-          rm -rf x86_64
-          mkdir -p x86_64
-          find ../x86_64 -name '*.pkg.tar.zst' -exec cp {} x86_64/ \;
-          cp ../x86_64/*.db* x86_64/ 2>/dev/null || true
-          cp ../x86_64/*.files* x86_64/ 2>/dev/null || true
-          git add x86_64/
-          if git diff --cached --quiet; then
+          rm -rf "$PUB/x86_64"
+          mkdir -p "$PUB/x86_64"
+          cp -a "$SRC/." "$PUB/x86_64/"
+          git -C "$PUB" add x86_64/
+          if git -C "$PUB" diff --cached --quiet; then
             echo "Değişiklik yok, push atlanıyor"
           else
-            git commit -m "Update repo [skip ci]"
-            git push -f origin gh-pages
+            git -C "$PUB" commit -m "Update repo [skip ci]"
+            git -C "$PUB" push -f origin gh-pages
           fi
