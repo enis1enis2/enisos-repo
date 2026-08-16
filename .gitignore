@@ -1,0 +1,9 @@
+# Makepkg çıktıları
+*.pkg.tar.zst
+*.pkg.tar.xz
+src/
+pkg/
+*.db
+*.db.tar.gz
+*.files
+*.files.tar.gz
