@@ -88,6 +88,14 @@ jobs:
           rm -rf "$PUB/x86_64"
           mkdir -p "$PUB/x86_64"
           cp -a "$SRC/." "$PUB/x86_64/"
+          # GitHub Pages symlink servis etmez; repo-add'ın ürettiği
+          # .db/.files symlink'lerini gerçek kopyaya çevir (gzip magic tanınır)
+          for f in "$PUB/x86_64/enisrepo.db" "$PUB/x86_64/enisrepo.files"; do
+            if [ -L "$f" ]; then
+              rm "$f"
+              cp "$f.tar.gz" "$f"
+            fi
+          done
           git -C "$PUB" add x86_64/
           if git -C "$PUB" diff --cached --quiet; then
             echo "Değişiklik yok, push atlanıyor"
